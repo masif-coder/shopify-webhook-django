@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Shopify Webhook Django Application
 
 A Django application that handles Shopify webhooks for order creation and displays order information.
@@ -69,3 +70,6 @@ https://your-domain.railway.app/webhooks/orders/create/
 - The application validates Shopify webhook signatures
 - Environment variables are used for sensitive information
 - HTTPS is required for webhook endpoints
+=======
+# shopify-webhook-django
+>>>>>>> 3dee018ecf7f8c86f08d981b4660f495a6c5177d
