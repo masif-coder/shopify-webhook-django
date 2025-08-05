@@ -1,3 +1,0 @@
-@echo off
-echo Starting Django server on port 5000...
-python manage.py runserver 127.0.0.1:5000

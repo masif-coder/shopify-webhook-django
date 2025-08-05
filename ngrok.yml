@@ -1,6 +1,0 @@
-version: "2"
-authtoken: "30oncg7lyqkBWzBw0i0IZcXKGDt_4P9XoiLqo2cy3tLmJKMra"
-tunnels:
-  django:
-    addr: 8000
-    proto: http
