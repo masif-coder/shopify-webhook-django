@@ -90,26 +90,58 @@ def index(request):
     """
     View to display all orders in a nice HTML interface
     """
-    # Get all orders with debug logging
-    orders = ShopifyWebhookOrder.objects.all().order_by('-created_at')
-    print(f"Found {orders.count()} orders in database")
-    
-    # Get the latest order if any exists
-    latest_order = orders.first() if orders.exists() else None
-    if latest_order:
-        print(f"Latest order: {latest_order.order_number} - {latest_order.email} - {latest_order.created_at}")
-    
-    # Get the webhook URL from request
-    webhook_url = f"https://{request.get_host()}/webhooks/shopify/order/create/"
-    print(f"Webhook URL: {webhook_url}")
-    
-    context = {
-        'orders': orders,
-        'latest_order': latest_order,
-        'webhook_url': webhook_url,
-    }
-    
-    return render(request, 'shopifywebhook/orders.html', context)
+    try:
+        print("\n=== Dashboard Request ===")
+        print(f"Request Method: {request.method}")
+        print(f"Host: {request.get_host()}")
+        print(f"User Agent: {request.headers.get('User-Agent', 'Unknown')}")
+        
+        # Get all orders with debug logging
+        try:
+            orders = ShopifyWebhookOrder.objects.all().order_by('-created_at')
+            order_count = orders.count()
+            print(f"Found {order_count} orders in database")
+        except Exception as e:
+            print(f"Error fetching orders: {str(e)}")
+            orders = []
+            order_count = 0
+        
+        # Get the latest order if any exists
+        try:
+            latest_order = orders.first() if orders.exists() else None
+            if latest_order:
+                print(f"Latest order: {latest_order.order_number} - {latest_order.email} - {latest_order.created_at}")
+        except Exception as e:
+            print(f"Error getting latest order: {str(e)}")
+            latest_order = None
+        
+        # Get the webhook URL from request
+        try:
+            webhook_url = f"https://{request.get_host()}/webhooks/shopify/order/create/"
+            print(f"Webhook URL: {webhook_url}")
+        except Exception as e:
+            print(f"Error constructing webhook URL: {str(e)}")
+            webhook_url = "Error generating webhook URL"
+        
+        # Build context for template
+        context = {
+            'orders': orders,
+            'latest_order': latest_order,
+            'webhook_url': webhook_url,
+            'order_count': order_count,
+            'last_checked': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        
+        return render(request, 'shopifywebhook/orders.html', context)
+        
+    except Exception as e:
+        print(f"Unexpected error in dashboard view: {str(e)}")
+        error_context = {
+            'error_message': "An error occurred while loading the dashboard.",
+            'webhook_url': f"https://{request.get_host()}/webhooks/shopify/order/create/",
+            'last_checked': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        return render(request, 'shopifywebhook/orders.html', error_context, status=500)
 
 @csrf_exempt
 def webhook_order_created(request):
