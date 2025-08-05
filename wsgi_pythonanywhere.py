@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-project_home = '/home/Asifjjj/shopify-webhook-django'
+project_home = '/home/Asifjammu1/shopify-webhook-django'
 env_path = os.path.join(project_home, '.env')
 load_dotenv(env_path)
 

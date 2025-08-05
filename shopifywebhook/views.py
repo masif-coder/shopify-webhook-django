@@ -12,11 +12,15 @@ def index(request):
     """
     View to display all orders in a nice HTML interface
     """
-    # Get all orders
+    # Get all orders with debug logging
     orders = ShopifyWebhookOrder.objects.all().order_by('-created_at')
+    print(f"Found {orders.count()} orders in database")
+    for order in orders:
+        print(f"Order in DB: {order.order_number} - {order.email} - {order.created_at}")
     
     # Get the webhook URL from request
     webhook_url = f"https://{request.get_host()}/webhooks/shopify/order/create/"
+    print(f"Webhook URL: {webhook_url}")
     
     context = {
         'orders': orders,
@@ -27,6 +31,11 @@ def index(request):
 
 @csrf_exempt
 def webhook_order_created(request):
+    print("\n=== Webhook Request Received ===")
+    print(f"Method: {request.method}")
+    print(f"Content Type: {request.content_type}")
+    print(f"Headers: {dict(request.headers)}")
+    
     if request.method == 'GET':
         return JsonResponse({
             "status": "ok",
@@ -59,23 +68,47 @@ def webhook_order_created(request):
         data = json.loads(request.body)
         print(f"Received order data: {json.dumps(data, indent=2)}")
         
+        # Print received data for debugging
+        print("Processing order data:")
+        print(f"Order ID: {data.get('id')}")
+        print(f"Order Number: {data.get('order_number')}")
+        print(f"Email: {data.get('email')}")
+        print(f"Total Price: {data.get('total_price')}")
+        
+        # Log important fields
+        print("=== Order Data ===")
+        print(f"Order ID: {data.get('id')}")
+        print(f"Order Number: {data.get('order_number')}")
+        print(f"Email: {data.get('email')}")
+        print(f"Total Price: {data.get('total_price')}")
+        print("==================")
+        
         # Try to get existing order or create new one
-        order, created = ShopifyWebhookOrder.objects.update_or_create(
-            order_id=data['id'],
-            defaults={
-                'order_number': data['order_number'],
-                'email': data.get('email'),
-                'total_price': data['total_price'],
-                'raw_data': data
-            }
-        )
-        
-        if created:
-            print(f"Successfully created new order: {order}")
-        else:
-            print(f"Successfully updated existing order: {order}")
-        
-        return HttpResponse("Order processed successfully", status=200)
+        try:
+            order, created = ShopifyWebhookOrder.objects.update_or_create(
+                order_id=str(data['id']),  # Convert to string to ensure compatibility
+                defaults={
+                    'order_number': str(data['order_number']),
+                    'email': data.get('email') or None,  # Handle empty email
+                    'total_price': float(data['total_price']),  # Convert to float
+                    'raw_data': data
+                }
+            )
+            
+            # Verify the order was saved
+            saved_order = ShopifyWebhookOrder.objects.get(order_id=str(data['id']))
+            print(f"Verified saved order: {saved_order}")
+            print(f"Order details - Number: {saved_order.order_number}, Email: {saved_order.email}, Price: {saved_order.total_price}")
+            
+            if created:
+                print(f"Successfully created new order: {order}")
+            else:
+                print(f"Successfully updated existing order: {order}")
+            
+            return HttpResponse("Order processed successfully", status=200)
+        except Exception as e:
+            print(f"Error saving order: {str(e)}")
+            raise
         
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {e}")
