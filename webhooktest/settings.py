@@ -1,5 +1,9 @@
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -96,7 +100,7 @@ SHOPIFY_ACCESS_TOKEN = os.environ.get('SHOPIFY_ACCESS_TOKEN')  # Get from Railwa
 SHOPIFY_WEBHOOK_SECRET = os.environ.get('SHOPIFY_WEBHOOK_SECRET')  # Get from Railway environment variables
 
 # Railway domain and any custom domains
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.ngrok.io', '315995d12acc.ngrok-free.app'] + os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # Server Port
 PORT = int(os.environ.get('PORT', 5000))

@@ -42,8 +42,13 @@ def webhook_order_created(request):
     # Verify Shopify webhook
     hmac_header = request.META.get('HTTP_X_SHOPIFY_HMAC_SHA256', '')
     webhook_secret = settings.SHOPIFY_WEBHOOK_SECRET
+    print(f"Webhook Secret from settings: {webhook_secret}")
     
     print(f"Verifying webhook with HMAC: {hmac_header}")
+    
+    if not webhook_secret:
+        print("Warning: SHOPIFY_WEBHOOK_SECRET is not set!")
+        return HttpResponse("Webhook secret not configured", status=500)
     
     if not verify_webhook(request.body, hmac_header, webhook_secret):
         print("Webhook verification failed!")
