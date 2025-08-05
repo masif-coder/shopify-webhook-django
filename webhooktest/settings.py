@@ -126,7 +126,11 @@ ALLOWED_HOSTS = [
 ]
 
 if DEBUG:
-    ALLOWED_HOSTS.extend(['.ngrok.io', '315995d12acc.ngrok-free.app'])
+    ALLOWED_HOSTS.extend([
+        '.ngrok.io',
+        '.ngrok-free.app',  # Allow all ngrok-free.app subdomains
+        '315995d12acc.ngrok-free.app',  # Your specific ngrok domain
+    ])
 
 # Server Port
 PORT = int(os.environ.get('PORT', 5000))

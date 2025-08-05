@@ -117,11 +117,32 @@ def index(request):
         
         # Get the webhook URL from request
         try:
-            webhook_url = f"https://{request.get_host()}/webhooks/shopify/order/create/"
+            # Get the host and determine the appropriate URL scheme
+            host = request.get_host()
+            
+            # Handle different environments
+            if 'ngrok-free.app' in host:
+                # For ngrok, always use https
+                webhook_url = f"https://{host}/webhooks/shopify/order/create/"
+            elif 'pythonanywhere.com' in host:
+                # For PythonAnywhere, always use https
+                webhook_url = f"https://{host}/webhooks/shopify/order/create/"
+            else:
+                # For other environments, use the request scheme
+                scheme = request.scheme
+                webhook_url = f"{scheme}://{host}/webhooks/shopify/order/create/"
+            
             print(f"Webhook URL: {webhook_url}")
+            print(f"Host: {host}")
+            print(f"Environment: {'ngrok' if 'ngrok' in host else 'PythonAnywhere' if 'pythonanywhere.com' in host else 'other'}")
+            
+            # Validate the URL matches expected format
+            if not webhook_url.startswith(('http://', 'https://')):
+                raise ValueError("Invalid URL scheme")
+                
         except Exception as e:
             print(f"Error constructing webhook URL: {str(e)}")
-            webhook_url = "Error generating webhook URL"
+            webhook_url = "https://315995d12acc.ngrok-free.app/webhooks/shopify/order/create/"
         
         # Build context for template
         context = {
