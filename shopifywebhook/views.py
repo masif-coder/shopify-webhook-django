@@ -2,11 +2,44 @@ import json
 import hmac
 import hashlib
 import base64
+from decimal import Decimal
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from .models import ShopifyWebhookOrder
+
+def validate_order_data(data):
+    """
+    Validate and clean order data from Shopify webhook.
+    
+    Args:
+        data (dict): Raw order data from Shopify webhook
+        
+    Returns:
+        dict: Cleaned and validated order data
+        
+    Raises:
+        ValueError: If required fields are missing or invalid
+    """
+    required_fields = ['id', 'order_number', 'total_price']
+    missing_fields = [field for field in required_fields if field not in data]
+    
+    if missing_fields:
+        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+        
+    try:
+        order_data = {
+            'order_id': str(data['id']),
+            'order_number': str(data['order_number']),
+            'email': data.get('email') or None,
+            'total_price': Decimal(str(data['total_price'])),  # Use Decimal for precision
+            'raw_data': data
+        }
+        return order_data
+        
+    except (ValueError, TypeError, KeyError) as e:
+        raise ValueError(f"Invalid data format: {str(e)}")
 
 def index(request):
     """
@@ -87,56 +120,55 @@ def webhook_order_created(request):
         print(f"Total Price: {data.get('total_price')}")
         print("==================")
         
-        # Try to get existing order or create new one
+        # Validate and process the order
         try:
-            try:
-                # Clean and validate the data
-                order_data = {
-                    'order_id': str(data['id']),
-                    'order_number': str(data['order_number']),
-                    'email': data.get('email') or None,
-                    'total_price': float(data['total_price']),
-                    'raw_data': data
+            # Clean and validate the data
+            order_data = validate_order_data(data)
+            
+            # Create or update the order
+            order, created = ShopifyWebhookOrder.objects.update_or_create(
+                order_id=order_data['order_id'],
+                defaults={
+                    'order_number': order_data['order_number'],
+                    'email': order_data['email'],
+                    'total_price': order_data['total_price'],
+                    'raw_data': order_data['raw_data']
                 }
-                
-                # Create or update the order
-                order, created = ShopifyWebhookOrder.objects.update_or_create(
-                    order_id=order_data['order_id'],
-                    defaults={
-                        'order_number': order_data['order_number'],
-                        'email': order_data['email'],
-                        'total_price': order_data['total_price'],
-                        'raw_data': order_data['raw_data']
-                    }
-                )
-                
-                # Log success
-                action = "created" if created else "updated"
-                print(f"Successfully {action} order {order.order_number}")
-                print(f"Order details - ID: {order.order_id}, Number: {order.order_number}, "
-                      f"Email: {order.email}, Price: {order.total_price}")
-                
-                # Return success response with order details
-                return JsonResponse({
-                    "status": "success",
-                    "message": f"Order {action} successfully",
-                    "order": {
-                        "id": order.order_id,
-                        "number": order.order_number,
-                        "email": order.email,
-                        "total_price": str(order.total_price)
-                    }
-                }, status=200)
-                
-            except (ValueError, TypeError) as e:
-                print(f"Data validation error: {str(e)}")
-                return HttpResponse("Invalid data format", status=400)
-            except Exception as e:
-                print(f"Unexpected error saving order: {str(e)}")
-                return HttpResponse("Error saving order", status=500)
+            )
+            
+            # Log success
+            action = "created" if created else "updated"
+            print(f"Successfully {action} order {order.order_number}")
+            print(f"Order details - ID: {order.order_id}, Number: {order.order_number}, "
+                  f"Email: {order.email}, Price: {order.total_price}")
+            
+            # Return success response with order details
+            return JsonResponse({
+                "status": "success",
+                "message": f"Order {action} successfully",
+                "order": {
+                    "id": order.order_id,
+                    "number": order.order_number,
+                    "email": order.email,
+                    "total_price": str(order.total_price),
+                    "created_at": order.created_at.isoformat()
+                }
+            }, status=200)
+            
+        except ValueError as e:
+            print(f"Data validation error: {str(e)}")
+            return JsonResponse({
+                "status": "error",
+                "message": "Invalid data format",
+                "details": str(e)
+            }, status=400)
         except Exception as e:
-            print(f"Error saving order: {str(e)}")
-            raise
+            print(f"Error processing order: {str(e)}")
+            return JsonResponse({
+                "status": "error",
+                "message": "Internal server error",
+                "details": str(e)
+            }, status=500)
         
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {e}")
