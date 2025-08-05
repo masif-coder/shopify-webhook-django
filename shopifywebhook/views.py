@@ -15,8 +15,11 @@ def index(request):
     # Get all orders with debug logging
     orders = ShopifyWebhookOrder.objects.all().order_by('-created_at')
     print(f"Found {orders.count()} orders in database")
-    for order in orders:
-        print(f"Order in DB: {order.order_number} - {order.email} - {order.created_at}")
+    
+    # Get the latest order if any exists
+    latest_order = orders.first() if orders.exists() else None
+    if latest_order:
+        print(f"Latest order: {latest_order.order_number} - {latest_order.email} - {latest_order.created_at}")
     
     # Get the webhook URL from request
     webhook_url = f"https://{request.get_host()}/webhooks/shopify/order/create/"
@@ -24,6 +27,7 @@ def index(request):
     
     context = {
         'orders': orders,
+        'latest_order': latest_order,
         'webhook_url': webhook_url,
     }
     

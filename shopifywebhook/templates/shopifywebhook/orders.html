@@ -64,11 +64,18 @@
                             <div>
                                 <p class="mb-1">
                                     <strong>Status:</strong> 
-                                    <span class="badge bg-success">Active</span>
+                                    {% if latest_order and latest_order.created_at|timesince < "5 minutes" %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Waiting for Orders</span>
+                                    {% endif %}
                                 </p>
                                 <p class="mb-0">
                                     <small class="text-muted">Webhook URL: {{ webhook_url }}</small>
                                 </p>
+                                {% if latest_order %}
+                                    <small class="text-muted d-block mt-1">Last order received: {{ latest_order.created_at|timesince }} ago</small>
+                                {% endif %}
                             </div>
                             <div class="text-end">
                                 <small class="text-muted">Last checked: {% now "F j, Y, g:i a" %}</small>
