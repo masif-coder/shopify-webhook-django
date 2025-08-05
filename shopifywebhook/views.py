@@ -15,8 +15,8 @@ def index(request):
     # Get all orders
     orders = ShopifyWebhookOrder.objects.all().order_by('-created_at')
     
-    # Get the current ngrok URL
-    webhook_url = f"https://8f639b8414ab.ngrok-free.app/webhooks/shopify/order/create/"
+    # Get the webhook URL from request
+    webhook_url = f"https://{request.get_host()}/webhooks/shopify/order/create/"
     
     context = {
         'orders': orders,

@@ -97,3 +97,6 @@ SHOPIFY_WEBHOOK_SECRET = os.environ.get('SHOPIFY_WEBHOOK_SECRET')  # Get from Ra
 
 # Railway domain and any custom domains
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+
+# Server Port
+PORT = int(os.environ.get('PORT', 5000))
