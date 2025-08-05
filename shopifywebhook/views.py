@@ -89,27 +89,51 @@ def webhook_order_created(request):
         
         # Try to get existing order or create new one
         try:
-            order, created = ShopifyWebhookOrder.objects.update_or_create(
-                order_id=str(data['id']),  # Convert to string to ensure compatibility
-                defaults={
+            try:
+                # Clean and validate the data
+                order_data = {
+                    'order_id': str(data['id']),
                     'order_number': str(data['order_number']),
-                    'email': data.get('email') or None,  # Handle empty email
-                    'total_price': float(data['total_price']),  # Convert to float
+                    'email': data.get('email') or None,
+                    'total_price': float(data['total_price']),
                     'raw_data': data
                 }
-            )
-            
-            # Verify the order was saved
-            saved_order = ShopifyWebhookOrder.objects.get(order_id=str(data['id']))
-            print(f"Verified saved order: {saved_order}")
-            print(f"Order details - Number: {saved_order.order_number}, Email: {saved_order.email}, Price: {saved_order.total_price}")
-            
-            if created:
-                print(f"Successfully created new order: {order}")
-            else:
-                print(f"Successfully updated existing order: {order}")
-            
-            return HttpResponse("Order processed successfully", status=200)
+                
+                # Create or update the order
+                order, created = ShopifyWebhookOrder.objects.update_or_create(
+                    order_id=order_data['order_id'],
+                    defaults={
+                        'order_number': order_data['order_number'],
+                        'email': order_data['email'],
+                        'total_price': order_data['total_price'],
+                        'raw_data': order_data['raw_data']
+                    }
+                )
+                
+                # Log success
+                action = "created" if created else "updated"
+                print(f"Successfully {action} order {order.order_number}")
+                print(f"Order details - ID: {order.order_id}, Number: {order.order_number}, "
+                      f"Email: {order.email}, Price: {order.total_price}")
+                
+                # Return success response with order details
+                return JsonResponse({
+                    "status": "success",
+                    "message": f"Order {action} successfully",
+                    "order": {
+                        "id": order.order_id,
+                        "number": order.order_number,
+                        "email": order.email,
+                        "total_price": str(order.total_price)
+                    }
+                }, status=200)
+                
+            except (ValueError, TypeError) as e:
+                print(f"Data validation error: {str(e)}")
+                return HttpResponse("Invalid data format", status=400)
+            except Exception as e:
+                print(f"Unexpected error saving order: {str(e)}")
+                return HttpResponse("Error saving order", status=500)
         except Exception as e:
             print(f"Error saving order: {str(e)}")
             raise
@@ -126,10 +150,37 @@ def webhook_order_created(request):
         return HttpResponse("Internal server error", status=500)
 
 def verify_webhook(data, hmac_header, webhook_secret):
-    digest = hmac.new(
-        webhook_secret.encode('utf-8'),
-        data,
-        hashlib.sha256
-    ).digest()
-    computed_hmac = base64.b64encode(digest).decode('utf-8')
-    return hmac.compare_digest(computed_hmac, hmac_header)
+    """
+    Verify that the webhook request came from Shopify using HMAC-SHA256.
+    
+    Args:
+        data: The raw request body
+        hmac_header: The X-Shopify-Hmac-SHA256 header value
+        webhook_secret: The webhook secret key from Shopify
+    
+    Returns:
+        bool: True if verification passes, False otherwise
+    """
+    try:
+        if not webhook_secret or not hmac_header:
+            print("Missing webhook secret or HMAC header")
+            return False
+            
+        digest = hmac.new(
+            webhook_secret.encode('utf-8'),
+            data,
+            hashlib.sha256
+        ).digest()
+        computed_hmac = base64.b64encode(digest).decode('utf-8')
+        
+        # Use hmac.compare_digest for timing-attack safe comparison
+        is_valid = hmac.compare_digest(computed_hmac, hmac_header)
+        
+        if not is_valid:
+            print("HMAC verification failed - signatures don't match")
+        
+        return is_valid
+        
+    except Exception as e:
+        print(f"Error verifying webhook: {str(e)}")
+        return False
