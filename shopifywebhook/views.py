@@ -3,10 +3,12 @@ import hmac
 import hashlib
 import base64
 from decimal import Decimal
+from datetime import datetime
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from .models import ShopifyWebhookOrder
 
 def validate_order_data(data):
@@ -22,24 +24,67 @@ def validate_order_data(data):
     Raises:
         ValueError: If required fields are missing or invalid
     """
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected dictionary, got {type(data)}")
+
     required_fields = ['id', 'order_number', 'total_price']
-    missing_fields = [field for field in required_fields if field not in data]
+    missing_fields = [field for field in required_fields if not data.get(field)]
     
     if missing_fields:
         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
         
     try:
+        # Clean and validate order ID
+        try:
+            order_id = str(data['id']).strip()
+            if not order_id:
+                raise ValueError("Order ID cannot be empty")
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Invalid order ID: {str(e)}")
+            
+        # Clean and validate order number
+        try:
+            order_number = str(data['order_number']).strip()
+            if not order_number:
+                raise ValueError("Order number cannot be empty")
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Invalid order number: {str(e)}")
+            
+        # Clean and validate total price
+        try:
+            total_price = Decimal(str(data['total_price']))
+            if total_price < 0:
+                raise ValueError("Total price cannot be negative")
+        except (TypeError, ValueError, DecimalException) as e:
+            raise ValueError(f"Invalid total price: {str(e)}")
+            
+        # Clean and validate email (optional)
+        email = data.get('email')
+        if email:
+            email = str(email).strip()
+            if not '@' in email:
+                raise ValueError("Invalid email format")
+                
         order_data = {
-            'order_id': str(data['id']),
-            'order_number': str(data['order_number']),
-            'email': data.get('email') or None,
-            'total_price': Decimal(str(data['total_price'])),  # Use Decimal for precision
+            'order_id': order_id,
+            'order_number': order_number,
+            'email': email or None,
+            'total_price': total_price,
             'raw_data': data
         }
+        
+        print("\n=== Validated Order Data ===")
+        for key, value in order_data.items():
+            if key != 'raw_data':  # Skip printing raw data
+                print(f"{key}: {value}")
+        print("==========================")
+        
         return order_data
         
-    except (ValueError, TypeError, KeyError) as e:
-        raise ValueError(f"Invalid data format: {str(e)}")
+    except Exception as e:
+        print(f"\nValidation Error: {str(e)}")
+        print(f"Input data: {json.dumps(data, indent=2)}")
+        raise ValueError(f"Data validation failed: {str(e)}")
 
 def index(request):
     """
@@ -71,12 +116,17 @@ def webhook_order_created(request):
     print("\n=== Webhook Request Received ===")
     print(f"Method: {request.method}")
     print(f"Content Type: {request.content_type}")
-    print(f"Headers: {dict(request.headers)}")
+    print(f"Request Path: {request.path}")
+    print(f"Query String: {request.META.get('QUERY_STRING', '')}")
+    print("Headers:")
+    for key, value in request.headers.items():
+        print(f"  {key}: {value}")
     
     if request.method == 'GET':
         return JsonResponse({
             "status": "ok",
-            "message": "Webhook endpoint is live (GET request)"
+            "message": "Webhook endpoint is live (GET request)",
+            "timestamp": datetime.now().isoformat()
         })
 
     if request.method != 'POST':
@@ -101,24 +151,37 @@ def webhook_order_created(request):
         return HttpResponse("Invalid webhook signature", status=401)
 
     try:
+        # Log raw request body for debugging
+        print("\n=== Raw Request Body ===")
+        try:
+            print(request.body.decode('utf-8'))
+        except UnicodeDecodeError:
+            print("(Could not decode request body as UTF-8)")
+        print("=====================")
+
         # Parse webhook data
-        data = json.loads(request.body)
-        print(f"Received order data: {json.dumps(data, indent=2)}")
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError as e:
+            print(f"JSON Decode Error: {str(e)}")
+            print(f"Request Body (first 1000 chars): {request.body[:1000]}")
+            return JsonResponse({
+                "status": "error",
+                "message": "Invalid JSON data",
+                "details": str(e)
+            }, status=400)
+
+        # Log parsed data
+        print("\n=== Parsed Order Data ===")
+        print(json.dumps(data, indent=2))
+        print("=====================")
         
-        # Print received data for debugging
-        print("Processing order data:")
-        print(f"Order ID: {data.get('id')}")
-        print(f"Order Number: {data.get('order_number')}")
-        print(f"Email: {data.get('email')}")
-        print(f"Total Price: {data.get('total_price')}")
-        
-        # Log important fields
-        print("=== Order Data ===")
-        print(f"Order ID: {data.get('id')}")
-        print(f"Order Number: {data.get('order_number')}")
-        print(f"Email: {data.get('email')}")
-        print(f"Total Price: {data.get('total_price')}")
-        print("==================")
+        # Extract and validate important fields
+        print("\n=== Order Details ===")
+        for field in ['id', 'order_number', 'email', 'total_price']:
+            value = data.get(field)
+            print(f"{field}: {value} (type: {type(value)})")
+        print("=====================")
         
         # Validate and process the order
         try:
